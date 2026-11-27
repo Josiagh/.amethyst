@@ -1,21 +1,38 @@
 package com.amethyst.client.module;
 
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.block.entity.*;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.ChestBlock;
+import net.minecraft.block.entity.BarrelBlockEntity;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.block.entity.DispenserBlockEntity;
+import net.minecraft.block.entity.DropperBlockEntity;
+import net.minecraft.block.entity.EnderChestBlockEntity;
+import net.minecraft.block.entity.HopperBlockEntity;
+import net.minecraft.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.block.entity.TrappedChestBlockEntity;
+import net.minecraft.block.enums.ChestType;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.chunk.WorldChunk;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class BaseESP extends Module {
     public final NumSetting range = new NumSetting("Range", 6, 1, 16);
+    public final NumSetting maxDistance = new NumSetting("Max Distance", 128, 16, 256);
+    public final BoolSetting tracers = new BoolSetting("Tracers", false);
     public final BoolSetting chests = new BoolSetting("Chests", true);
     public final BoolSetting enderChests = new BoolSetting("Ender Chests", true);
     public final BoolSetting shulkers = new BoolSetting("Shulkers", true);
@@ -23,13 +40,15 @@ public class BaseESP extends Module {
     public final BoolSetting droppers = new BoolSetting("Droppers", true);
     public final BoolSetting dispensers = new BoolSetting("Dispensers", true);
 
-    private record Esp(BlockPos pos, int color) {}
+    private record Esp(Box box, int color) {}
     private volatile List<Esp> targets = List.of();
     private int timer = 999;
 
     public BaseESP() {
         super("BaseESP", Category.RENDER);
         nums.add(range);
+        nums.add(maxDistance);
+        bools.add(tracers);
         bools.add(chests);
         bools.add(enderChests);
         bools.add(shulkers);
@@ -51,17 +70,39 @@ public class BaseESP extends Module {
         List<Esp> out = new ArrayList<>();
         ChunkPos c = mc.player.getChunkPos();
         int r = (int) range.value;
+        double maxSq = maxDistance.value * maxDistance.value;
+
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 Chunk ch = mc.world.getChunk(c.x + dx, c.z + dz, ChunkStatus.FULL, false);
                 if (!(ch instanceof WorldChunk wc)) continue;
                 for (BlockEntity be : wc.getBlockEntities().values()) {
                     int col = colorFor(be);
-                    if (col != 0) out.add(new Esp(be.getPos(), col));
+                    if (col == 0) continue;
+
+                    BlockPos p = be.getPos();
+                    if (mc.player.squaredDistanceTo(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5) > maxSq) continue;
+
+                    BlockState st = be.getCachedState();
+                    VoxelShape shape = st.getOutlineShape(mc.world, p);
+                    Box box = shape.isEmpty() ? new Box(p) : shape.getBoundingBox().offset(p);
+
+                    if (st.getBlock() instanceof ChestBlock && st.contains(ChestBlock.CHEST_TYPE)) {
+                        ChestType type = st.get(ChestBlock.CHEST_TYPE);
+                        if (type == ChestType.LEFT) continue; // the RIGHT half draws the merged box
+                        if (type == ChestType.RIGHT) {
+                            Direction d = ChestBlock.getFacing(st);
+                            box = box.union(box.offset(d.getOffsetX(), d.getOffsetY(), d.getOffsetZ()));
+                        }
+                    }
+                    out.add(new Esp(box, col));
                 }
             }
         }
-        targets = out;
+
+        Vec3d me = mc.player.getEyePos();
+        out.sort(Comparator.comparingDouble(e -> e.box().getCenter().squaredDistanceTo(me)));
+        targets = out.size() > 300 ? new ArrayList<>(out.subList(0, 300)) : out;
     }
 
     private int colorFor(BlockEntity be) {
@@ -106,43 +147,79 @@ public class BaseESP extends Module {
         Vec3d r = new Vec3d(-Math.cos(yr), 0, -Math.sin(yr));
         Vec3d u = r.crossProduct(f);
 
-        double fov = mc.options.getFov().getValue();
-        double tan = Math.tan(Math.toRadians(fov) / 2.0);
+        double tan = Math.tan(Math.toRadians(mc.options.getFov().getValue()) / 2.0);
         int w = mc.getWindow().getScaledWidth();
         int h = mc.getWindow().getScaledHeight();
         double aspect = (double) w / h;
 
         for (Esp t : list) {
-            BlockPos p = t.pos();
-            double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE;
-            double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-            boolean ok = true;
-
+            Box b = t.box();
+            double[][] c = new double[8][];
             for (int i = 0; i < 8; i++) {
-                Vec3d d = new Vec3d(p.getX() + (i & 1), p.getY() + ((i >> 1) & 1), p.getZ() + ((i >> 2) & 1)).subtract(cam);
-                double z = d.dotProduct(f);
-                if (z < 0.05) { ok = false; break; }
-                double sx = (d.dotProduct(r) / (z * tan * aspect) * 0.5 + 0.5) * w;
-                double sy = (0.5 - d.dotProduct(u) / (z * tan) * 0.5) * h;
-                minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
-                minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+                Vec3d d = new Vec3d((i & 1) == 0 ? b.minX : b.maxX,
+                                    (i & 2) == 0 ? b.minY : b.maxY,
+                                    (i & 4) == 0 ? b.minZ : b.maxZ).subtract(cam);
+                c[i] = new double[]{d.dotProduct(r), d.dotProduct(u), d.dotProduct(f)};
             }
-            if (!ok) continue;
-            if (maxX < 0 || minX > w || maxY < 0 || minY > h) continue;
+            for (int i = 0; i < 8; i++) {
+                for (int bit = 1; bit <= 4; bit <<= 1) {
+                    if ((i & bit) == 0) edge(ctx, c[i], c[i | bit], t.color(), w, h, tan, aspect);
+                }
+            }
 
-            int x1 = (int) MathHelper.clamp(minX, -5, w + 5);
-            int x2 = (int) MathHelper.clamp(maxX, -5, w + 5);
-            int y1 = (int) MathHelper.clamp(minY, -5, h + 5);
-            int y2 = (int) MathHelper.clamp(maxY, -5, h + 5);
-            if (x2 - x1 < 2) x2 = x1 + 2;
-            if (y2 - y1 < 2) y2 = y1 + 2;
+            if (tracers.value) {
+                Vec3d d = b.getCenter().subtract(cam);
+                double z = d.dotProduct(f);
+                if (z > 0.05) {
+                    double sx = (d.dotProduct(r) / (z * tan * aspect) * 0.5 + 0.5) * w;
+                    double sy = (0.5 - d.dotProduct(u) / (z * tan) * 0.5) * h;
+                    line(ctx, w / 2.0, h / 2.0, sx, sy, t.color() & 0xB0FFFFFF, w, h);
+                }
+            }
+        }
+    }
 
-            int col = t.color();
-            ctx.fill(x1, y1, x2, y2, (col & 0x00FFFFFF) | 0x30000000);
-            ctx.fill(x1, y1, x2, y1 + 1, col);
-            ctx.fill(x1, y2 - 1, x2, y2, col);
-            ctx.fill(x1, y1, x1 + 1, y2, col);
-            ctx.fill(x2 - 1, y1, x2, y2, col);
+    private static void edge(DrawContext ctx, double[] a, double[] b, int col, int w, int h, double tan, double aspect) {
+        double near = 0.05;
+        if (a[2] < near && b[2] < near) return;
+        double[] p = a, q = b;
+        if (a[2] < near) {
+            double k = (near - a[2]) / (b[2] - a[2]);
+            p = new double[]{a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, near};
+        } else if (b[2] < near) {
+            double k = (near - b[2]) / (a[2] - b[2]);
+            q = new double[]{b[0] + (a[0] - b[0]) * k, b[1] + (a[1] - b[1]) * k, near};
+        }
+        double x0 = (p[0] / (p[2] * tan * aspect) * 0.5 + 0.5) * w;
+        double y0 = (0.5 - p[1] / (p[2] * tan) * 0.5) * h;
+        double x1 = (q[0] / (q[2] * tan * aspect) * 0.5 + 0.5) * w;
+        double y1 = (0.5 - q[1] / (q[2] * tan) * 0.5) * h;
+        line(ctx, x0, y0, x1, y1, col, w, h);
+    }
+
+    /** Draws a 2px line, clipped to the screen so off-screen ends cost nothing. */
+    private static void line(DrawContext ctx, double x0, double y0, double x1, double y1, int col, int w, int h) {
+        double xmin = -20, xmax = w + 20, ymin = -20, ymax = h + 20;
+        double dx = x1 - x0, dy = y1 - y0, t0 = 0, t1 = 1;
+        double[] pp = {-dx, dx, -dy, dy};
+        double[] qq = {x0 - xmin, xmax - x0, y0 - ymin, ymax - y0};
+        for (int i = 0; i < 4; i++) {
+            if (pp[i] == 0) {
+                if (qq[i] < 0) return;
+            } else {
+                double rr = qq[i] / pp[i];
+                if (pp[i] < 0) { if (rr > t1) return; if (rr > t0) t0 = rr; }
+                else           { if (rr < t0) return; if (rr < t1) t1 = rr; }
+            }
+        }
+        double ax = x0 + t0 * dx, ay = y0 + t0 * dy, bx = x0 + t1 * dx, by = y0 + t1 * dy;
+        int steps = (int) Math.ceil(Math.max(Math.abs(bx - ax), Math.abs(by - ay)));
+        if (steps < 1) { ctx.fill((int) ax, (int) ay, (int) ax + 2, (int) ay + 2, col); return; }
+        for (int i = 0; i <= steps; i++) {
+            double k = (double) i / steps;
+            int x = (int) (ax + (bx - ax) * k);
+            int y = (int) (ay + (by - ay) * k);
+            ctx.fill(x, y, x + 2, y + 2, col);
         }
     }
 }
