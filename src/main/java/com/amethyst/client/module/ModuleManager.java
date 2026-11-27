@@ -17,6 +17,7 @@ public class ModuleManager {
         modules.add(new SusChunk());
         modules.add(new CrystalMacro());
         modules.add(new AnchorMacro());
+        modules.add(new AutoTotem());
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || client.world == null) return;
