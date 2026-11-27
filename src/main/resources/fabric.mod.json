@@ -6,6 +6,7 @@
   "description": "Amethyst utility client: ClickGUI, Freecam, Freelook, SusChunk and more.",
   "authors": ["You"],
   "license": "MIT",
+  "icon": "assets/amethystclient/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": ["com.amethyst.client.AmethystClient"]
