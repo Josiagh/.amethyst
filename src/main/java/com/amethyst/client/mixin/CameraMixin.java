@@ -5,6 +5,7 @@ import com.amethyst.client.module.ModuleManager;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,8 +27,19 @@ public abstract class CameraMixin {
                    MathHelper.lerp(td, CameraState.prevZ, CameraState.z));
             setRotation(CameraState.yaw, CameraState.pitch);
             this.thirdPerson = true;
-        } else if (ModuleManager.FREELOOK.isEnabled()) {
-            setRotation(CameraState.yaw, CameraState.pitch);
+} else if (ModuleManager.FREELOOK.isEnabled()) {
+            var p = MinecraftClient.getInstance().player;
+            if (p != null) {
+                double yr = Math.toRadians(CameraState.yaw);
+                double pr = Math.toRadians(CameraState.pitch);
+                double fx = -Math.sin(yr) * Math.cos(pr);
+                double fy = -Math.sin(pr);
+                double fz = Math.cos(yr) * Math.cos(pr);
+                Vec3d eye = p.getLerpedPos(td).add(0, p.getStandingEyeHeight(), 0);
+                setRotation(CameraState.yaw, CameraState.pitch);
+                setPos(eye.x - fx * 4, eye.y - fy * 4, eye.z - fz * 4);
+                this.thirdPerson = true;
+            }
         }
     }
 }
