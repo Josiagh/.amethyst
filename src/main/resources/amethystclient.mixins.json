@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "com.amethyst.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["CameraMixin", "EntityMixin", "KeyboardInputMixin", "MinecraftClientMixin"],
+  "injectors": { "defaultRequire": 1 }
+}
