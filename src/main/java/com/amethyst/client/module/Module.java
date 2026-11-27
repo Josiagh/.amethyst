@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class Module {
-    public enum Category { MOVEMENT, RENDER, WORLD }
+    public enum Category { MOVEMENT, RENDER, WORLD, COMBAT }
 
     public final String name;
     public final Category category;
