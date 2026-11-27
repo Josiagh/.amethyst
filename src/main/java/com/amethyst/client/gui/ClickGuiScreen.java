@@ -1,6 +1,7 @@
 package com.amethyst.client.gui;
 
 import com.amethyst.client.module.*;
+import com.amethyst.client.module.Module;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
