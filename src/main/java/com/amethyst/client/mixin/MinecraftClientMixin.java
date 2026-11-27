@@ -1,5 +1,7 @@
 package com.amethyst.client.mixin;
 
+import com.amethyst.client.module.AnchorMacro;
+import com.amethyst.client.module.CrystalMacro;
 import com.amethyst.client.module.ModuleManager;
 import net.minecraft.client.MinecraftClient;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,7 +23,7 @@ public abstract class MinecraftClientMixin {
 
     @Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
     private void amethyst$use(CallbackInfo ci) {
-        if (amethyst$blocked()) ci.cancel();
+        if (amethyst$blocked() || CrystalMacro.cancelUse() || AnchorMacro.cancelUse()) ci.cancel();
     }
 
     @Inject(method = "handleBlockBreaking", at = @At("HEAD"), cancellable = true)
