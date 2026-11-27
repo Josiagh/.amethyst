@@ -35,8 +35,8 @@ public class Freecam extends Module {
         Vec3d move = Vec3d.ZERO;
         if (mc.options.forwardKey.isPressed()) move = move.add(fwd);
         if (mc.options.backKey.isPressed())    move = move.subtract(fwd);
-        if (mc.options.rightKey.isPressed())   move = move.subtract(right);
-        if (mc.options.leftKey.isPressed())    move = move.add(right);
+        if (mc.options.rightKey.isPressed())   move = move.add(right);
+if (mc.options.leftKey.isPressed())    move = move.subtract(right);
         if (mc.options.jumpKey.isPressed())    move = move.add(0, 1, 0);
         if (mc.options.sneakKey.isPressed())   move = move.add(0, -1, 0);
 
