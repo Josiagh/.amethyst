@@ -15,6 +15,8 @@ public class ModuleManager {
         modules.add(FREELOOK);
         modules.add(new Fullbright());
         modules.add(new SusChunk());
+        modules.add(new CrystalMacro());
+        modules.add(new AnchorMacro());
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || client.world == null) return;
