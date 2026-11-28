@@ -15,6 +15,14 @@ public class ModuleManager {
         modules.add(FREELOOK);
         modules.add(new Fullbright());
         modules.add(new BaseESP());
+        modules.add(new PlayerESP());
+        modules.add(new Tracers());
+        modules.add(new NameTags());
+        modules.add(new SkeletonESP());
+        modules.add(new BlockESP());
+        modules.add(new TargetHud());
+        modules.add(new Zoom());
+        modules.add(new Hud());
         modules.add(new SusChunk());
         modules.add(new CrystalMacro());
         modules.add(new AnchorMacro());
