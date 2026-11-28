@@ -24,6 +24,10 @@ public class ModuleManager {
         modules.add(new Zoom());
         modules.add(new Hud());
         modules.add(new SusChunk());
+        modules.add(new LightESP());
+        modules.add(new TunnelESP());
+        modules.add(new BedrockVoidESP());
+        modules.add(new ActivityESP());
         modules.add(new CrystalMacro());
         modules.add(new AnchorMacro());
         modules.add(new AutoTotem());
